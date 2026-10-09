@@ -188,7 +188,10 @@ uv run photo-review review
 
 - **"Could not get path to photo library database"** or **"Operation not permitted"**: Full Disk Access isn't on. See setup step 3, then quit and reopen the app.
 - **Some photos are only in iCloud.** That's fine. The tool uses the preview images Photos keeps on your Mac.
-- **`apply --yes` does nothing or fails.** Go to **System Settings → Privacy & Security → Automation** and allow VS Code (or Terminal) to control **Photos**.
+- **`apply --yes` says "isn't letting this app control Photos"**, or the albums don't appear:
+  1. Open **System Settings → Privacy & Security → Automation**.
+  2. Find **Visual Studio Code** (or **Terminal**) and switch on **Photos**.
+  3. If it isn't listed, run `tccutil reset AppleEvents com.microsoft.VSCode`, then quit and reopen VS Code and run `apply --yes` again. macOS will ask for permission; click **OK**.
 - **"address already in use" when starting `review`**: the review page is already running in another terminal. Use that one, or stop it with **Ctrl+C** first.
 - **Start over completely:** delete the `data/` folder. This also deletes your review decisions. Then begin again at step 1.
 
