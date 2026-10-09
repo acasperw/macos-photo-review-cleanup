@@ -1,0 +1,27 @@
+[project]
+name = "photo-review"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Alex Whitlock", email = "zanderwhitlock@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.5.0",
+    "fastapi>=0.143.0",
+    "imagehash>=4.3.2",
+    "numpy>=2.5.3",
+    "open-clip-torch>=3.3.0",
+    "osxphotos>=0.77.2",
+    "pillow>=12.3.0",
+    "torch>=2.14.1",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+photo-review = "photo_review:main"
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"

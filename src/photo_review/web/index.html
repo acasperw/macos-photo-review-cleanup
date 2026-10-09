@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Photo Review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#16171a; --panel:#202227; --text:#e8e8ea; --muted:#9a9ca3; --keep:#3fb37f; --remove:#e5534b; --accent:#5b9dff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg); color:var(--text); }
+  header { position:sticky; top:0; z-index:10; background:var(--panel); padding:10px 16px; border-bottom:1px solid #333; }
+  h1 { font-size:16px; margin:0 0 8px; }
+  nav { display:flex; flex-wrap:wrap; gap:6px; }
+  button { background:#2c2f36; color:var(--text); border:1px solid #3a3d45; border-radius:6px; padding:5px 10px; cursor:pointer; font:inherit; }
+  button:hover { border-color:#666; }
+  .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .count { opacity:.8; font-size:12px; margin-left:4px; }
+  .controls { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:8px; color:var(--muted); }
+  main { padding:16px; }
+  .muted { color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
+  .row { display:flex; gap:12px; overflow-x:auto; padding-bottom:4px; }
+  .row .card { flex:0 0 220px; }
+  .card { background:var(--panel); border:2px solid transparent; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+  .card.keep { border-color:var(--keep); }
+  .card.remove { border-color:var(--remove); }
+  .card.remove img { opacity:.45; }
+  .card.pending.suggest-remove { border:2px dashed rgba(229,83,75,.6); }
+  .card.pending.suggest-keep { border:2px dashed rgba(63,179,127,.6); }
+  .thumb { position:relative; background:#000; }
+  .thumb img { display:block; width:100%; height:200px; object-fit:cover; cursor:zoom-in; }
+  .badges { position:absolute; top:6px; left:6px; right:6px; display:flex; flex-wrap:wrap; gap:4px; pointer-events:none; }
+  .badge { background:rgba(0,0,0,.7); border-radius:4px; padding:1px 6px; font-size:12px; }
+  .badge.keeper { background:var(--accent); }
+  .badge.protected { background:var(--keep); }
+  .meta { padding:8px; flex:1; }
+  .name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .reason { margin-top:4px; font-size:12px; color:var(--muted); }
+  .actions { display:flex; gap:6px; padding:0 8px 8px; }
+  .actions button { flex:1; }
+  .card.keep .keep-btn { background:var(--keep); border-color:var(--keep); }
+  .card.remove .remove-btn { background:var(--remove); border-color:var(--remove); }
+  .cluster { background:#1c1d21; border:1px solid #2c2f36; border-radius:10px; padding:12px; margin-bottom:16px; }
+  .cluster > header { position:static; background:none; border:0; padding:0 0 10px; display:flex; gap:10px; align-items:center; }
+  .cluster > header .spacer { flex:1; }
+  #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; cursor:zoom-out; }
+  #lightbox[hidden] { display:none; }
+  #lightbox img { max-width:95vw; max-height:85vh; object-fit:contain; }
+  #lightbox p { max-width:900px; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Photo Review</h1>
+  <nav id="tabs"></nav>
+  <div class="controls">
+    <label id="confControl">Min confidence
+      <input type="range" id="conf" min="0.3" max="1" step="0.05" value="0.5">
+      <span id="confVal">0.50</span>
+    </label>
+    <label><input type="checkbox" id="pendingOnly" checked> Pending only</label>
+    <button id="bulkRemove">Remove all shown</button>
+    <button id="bulkKeep">Keep all shown</button>
+    <span class="muted">Dashed border = suggestion · solid = your decision · click image to enlarge</span>
+  </div>
+</header>
+<main id="content"></main>
+<div id="lightbox" hidden><img alt=""><p></p></div>
+
+<script>
+const state = { tab: "duplicate", conf: 0.5, pendingOnly: true, items: [], clusters: [] };
+
+function el(tag, attrs = {}, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  e.append(...children.filter(c => c != null && c !== false));
+  return e;
+}
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+const fmt = (v, d = 2) => (v == null ? "–" : Number(v).toFixed(d));
+
+async function loadSummary() {
+  const s = await api(`/api/summary?min_confidence=${state.conf}`);
+  const nav = document.getElementById("tabs");
+  nav.replaceChildren(...s.categories.map(c => el("button", {
+    class: c.key === state.tab ? "tab active" : "tab",
+    title: `${c.flagged} flagged · ${c.remove} remove · ${c.keep} keep`,
+    onclick: () => { state.tab = c.key; load(); },
+  }, c.label, el("span", { class: "count" }, `${c.pending} pending`))));
+}
+
+async function load() {
+  const isDup = state.tab === "duplicate";
+  document.getElementById("confControl").hidden = isDup;
+  document.getElementById("bulkRemove").textContent = isDup ? "Accept all suggestions shown" : "Remove all shown";
+  const main = document.getElementById("content");
+  main.replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  await loadSummary();
+  if (isDup) {
+    const { clusters } = await api("/api/clusters");
+    state.clusters = clusters.filter(c => !state.pendingOnly || c.members.some(m => !m.decision));
+    main.replaceChildren(...(state.clusters.length ? state.clusters.map(clusterCard) : [el("p", { class: "muted" }, "Nothing to review.")]));
+  } else {
+    const { items } = await api(`/api/flags/${state.tab}?min_confidence=${state.conf}`);
+    state.items = items.filter(i => !state.pendingOnly || !i.decision);
+    main.replaceChildren(state.items.length
+      ? el("div", { class: "grid" }, ...state.items.map(i => itemCard(i)))
+      : el("p", { class: "muted" }, "Nothing to review."));
+  }
+}
+
+async function decide(changes, category = state.tab) {
+  await api("/api/decisions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: changes.map(({ item, decision }) => ({ uuid: item.uuid, category, decision })) }),
+  });
+  for (const { item, decision } of changes) item.decision = decision;
+  loadSummary();
+}
+
+function toggle(item, decision) {
+  return decide([{ item, decision: item.decision === decision ? null : decision }]);
+}
+
+function itemCard(item, cluster = null) {
+  const suggestion = item.suggested || "remove";
+  const isProtected = item.favorite || item.user_edited;
+  const node = el("div", { class: `card ${item.decision || "pending"} suggest-${suggestion}` },
+    el("div", { class: "thumb" },
+      el("img", { src: `/thumb/${item.uuid}`, loading: "lazy", alt: item.filename, onclick: () => openLightbox(item) }),
+      el("div", { class: "badges" },
+        item.is_keeper && el("span", { class: "badge keeper" }, "★ suggested keeper"),
+        isProtected && el("span", { class: "badge protected" }, item.favorite ? "♥ favorite" : "✎ edited"),
+        item.confidence != null && el("span", { class: "badge" }, fmt(item.confidence)),
+        item.kind === "video" && el("span", { class: "badge" }, `▶ ${fmt(item.duration, 1)}s`),
+        item.named.length > 0 && el("span", { class: "badge" }, `👤 ${item.named.join(", ")}`),
+      ),
+    ),
+    el("div", { class: "meta" },
+      el("div", { class: "name", title: item.filename }, item.filename),
+      el("div", { class: "muted" }, `${item.date} · score ${fmt(item.score)} · sharp ${fmt(item.sharpness, 0)} · ${item.mp} MP`),
+      item.reason && el("div", { class: "reason" }, item.reason),
+    ),
+    el("div", { class: "actions" },
+      el("button", { class: "keep-btn", onclick: () => toggle(item, "keep").then(rerender) }, "Keep"),
+      el("button", { class: "remove-btn", onclick: () => toggle(item, "remove").then(rerender) }, "Remove"),
+    ),
+  );
+  function rerender() {
+    if (cluster) cluster.node.replaceWith(clusterCard(cluster));
+    else node.replaceWith(itemCard(item));
+  }
+  return node;
+}
+
+function clusterCard(c) {
+  const accept = () => decide(c.members.map(m => ({ item: m, decision: m.suggested })), "duplicate");
+  const keepAll = () => decide(c.members.map(m => ({ item: m, decision: "keep" })), "duplicate");
+  c.node = el("section", { class: "cluster" },
+    el("header", {},
+      el("strong", {}, `${c.members.length} similar shots`),
+      el("span", { class: "muted" }, c.members[0].date),
+      el("span", { class: "spacer" }),
+      el("button", { onclick: () => accept().then(() => c.node.replaceWith(clusterCard(c))) }, "Accept suggestion"),
+      el("button", { onclick: () => keepAll().then(() => c.node.replaceWith(clusterCard(c))) }, "Keep all"),
+    ),
+    el("div", { class: "row" }, ...c.members.map(m => itemCard(m, c))),
+  );
+  return c.node;
+}
+
+function openLightbox(item) {
+  const box = document.getElementById("lightbox");
+  box.querySelector("img").src = `/full/${item.uuid}`;
+  box.querySelector("p").textContent =
+    `${item.filename} · ${item.date}${item.kind === "video" ? " · video (poster frame)" : ""}` +
+    `${item.caption ? ` — “${item.caption}”` : ""}${item.reason ? ` — ${item.reason}` : ""}`;
+  box.hidden = false;
+}
+
+document.getElementById("lightbox").onclick = e => { e.currentTarget.hidden = true; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("lightbox").hidden = true; });
+
+const conf = document.getElementById("conf");
+conf.oninput = () => { document.getElementById("confVal").textContent = Number(conf.value).toFixed(2); };
+conf.onchange = () => { state.conf = Number(conf.value); load(); };
+document.getElementById("pendingOnly").onchange = e => { state.pendingOnly = e.target.checked; load(); };
+
+document.getElementById("bulkRemove").onclick = async () => {
+  if (state.tab === "duplicate") {
+    await decide(state.clusters.flatMap(c => c.members.map(m => ({ item: m, decision: m.suggested }))), "duplicate");
+  } else {
+    if (!confirm(`Mark ${state.items.length} items as remove?`)) return;
+    await decide(state.items.map(item => ({ item, decision: "remove" })));
+  }
+  load();
+};
+document.getElementById("bulkKeep").onclick = async () => {
+  const items = state.tab === "duplicate" ? state.clusters.flatMap(c => c.members) : state.items;
+  await decide(items.map(item => ({ item, decision: "keep" })));
+  load();
+};
+
+load();
+</script>
+</body>
+</html>
