@@ -89,19 +89,31 @@ uv run photo-review review
 
 Your browser opens at **http://127.0.0.1:8765**. It only runs on your Mac.
 
-- **Tabs** at the top: one per category, each showing how many items are left to review.
+- **Progress bar** at the top: how much you've reviewed and how many photos are marked for removal.
+- **Tabs:** one per category, each with the number left to review. It shows ✓ when the category is finished.
 - **Borders:**
   - **Dashed** border: a *suggestion*. Green means keep, red means remove.
   - **Solid** border: *your decision*.
-- **Keep / Remove** buttons are on every photo. Click the same button again to undo.
-- **Click a photo** to see it larger, with Apple's description. Press Esc or click to close.
-- **Duplicates tab:** each row is a group of similar shots. The ★ marks the suggested keeper.
+- **Keep / Remove** buttons are on every photo. Click the same button again to clear it.
+- **Finished items slide away**, so the next one is always at the top. Untick **Hide finished** to see them again.
+- **Undo:** an **Undo** button appears after every action. You can also press **Z**.
+- **Click a photo** to see it larger. Use the ← → arrow keys to flip through, and Keep / Remove work there too.
+- **Duplicates tab:** each box is a group of similar shots. The ★ marks the suggested keeper, and the best score, sharpness and resolution in the group are in **bold**.
   - **Accept suggestion** keeps the ★ photo and removes the rest.
+  - **Keep only this** keeps that photo and removes the rest. Use it when you prefer a different photo to the ★ one.
   - **Keep all** keeps every photo in the group.
 - **Other tabs:**
   - Use the **Min confidence** slider to show only the most certain flags.
-  - **Remove all shown** marks everything on screen as remove.
-- **Pending only** hides items you've already decided on.
+  - **Remove all** marks everything in the tab as remove. It asks you to confirm first.
+- When a tab is finished, a **Next** button takes you to the next category with items left.
+
+**Keyboard shortcuts** (press **?** in the page to see them):
+
+| Where | Keys |
+|---|---|
+| Duplicates | **A** accept suggestion · **K** keep all · **1–9** keep only that photo · **↑ ↓** move between groups |
+| Other tabs | **R** remove · **K** keep · arrow keys to move |
+| Anywhere | **Space** enlarge · **Z** undo · **?** help |
 
 Your decisions save automatically. Press **Ctrl+C** in the terminal to stop the review page.
 
@@ -177,6 +189,7 @@ uv run photo-review review
 - **"Could not get path to photo library database"** or **"Operation not permitted"**: Full Disk Access isn't on. See setup step 3, then quit and reopen the app.
 - **Some photos are only in iCloud.** That's fine. The tool uses the preview images Photos keeps on your Mac.
 - **`apply --yes` does nothing or fails.** Go to **System Settings → Privacy & Security → Automation** and allow VS Code (or Terminal) to control **Photos**.
+- **"address already in use" when starting `review`**: the review page is already running in another terminal. Use that one, or stop it with **Ctrl+C** first.
 - **Start over completely:** delete the `data/` folder. This also deletes your review decisions. Then begin again at step 1.
 
 All data (scan results, analysis, decisions, thumbnails) is stored in `data/`, on your Mac only, and isn't committed to git.

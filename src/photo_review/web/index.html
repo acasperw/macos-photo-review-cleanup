@@ -5,70 +5,162 @@
 <title>Photo Review</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { --bg:#16171a; --panel:#202227; --text:#e8e8ea; --muted:#9a9ca3; --keep:#3fb37f; --remove:#e5534b; --accent:#5b9dff; }
+  :root { --bg:#16171a; --panel:#202227; --panel2:#1c1d21; --text:#e8e8ea; --muted:#9a9ca3; --keep:#3fb37f; --remove:#e5534b; --accent:#5b9dff; }
   * { box-sizing: border-box; }
   body { margin:0; font:14px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg); color:var(--text); }
-  header { position:sticky; top:0; z-index:10; background:var(--panel); padding:10px 16px; border-bottom:1px solid #333; }
-  h1 { font-size:16px; margin:0 0 8px; }
+  header.top { position:sticky; top:0; z-index:10; background:var(--panel); padding:10px 16px 8px; border-bottom:1px solid #333; }
+  .titlebar { display:flex; align-items:center; gap:16px; margin-bottom:8px; }
+  h1 { font-size:16px; margin:0; }
+  .progress { flex:1; display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12px; }
+  .progress .bar { flex:0 0 180px; height:6px; background:#33363d; border-radius:3px; overflow:hidden; }
+  .progress .bar div { height:100%; width:0; background:var(--keep); transition:width .3s; }
   nav { display:flex; flex-wrap:wrap; gap:6px; }
   button { background:#2c2f36; color:var(--text); border:1px solid #3a3d45; border-radius:6px; padding:5px 10px; cursor:pointer; font:inherit; }
   button:hover { border-color:#666; }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
   .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .count { opacity:.8; font-size:12px; margin-left:4px; }
+  .tab .count { display:inline-block; min-width:20px; margin-left:6px; padding:0 6px; border-radius:10px; background:rgba(255,255,255,.14); font-size:12px; text-align:center; }
+  .tab.done .count { background:var(--keep); color:#fff; }
   .controls { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:8px; color:var(--muted); }
+  .controls .spacer { flex:1; }
+  kbd { font:11px ui-monospace, Menlo, monospace; background:rgba(255,255,255,.15); border-radius:3px; padding:0 4px; margin-left:4px; }
   main { padding:16px; }
   .muted { color:var(--muted); }
   .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:12px; }
   .row { display:flex; gap:12px; overflow-x:auto; padding-bottom:4px; }
-  .row .card { flex:0 0 220px; }
-  .card { background:var(--panel); border:2px solid transparent; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
+  .row .card { flex:0 0 230px; }
+  .card { position:relative; background:var(--panel); border:2px solid transparent; border-radius:8px; overflow:hidden; display:flex; flex-direction:column; scroll-margin:170px 0 24px; transition:opacity .25s, transform .25s; }
   .card.keep { border-color:var(--keep); }
   .card.remove { border-color:var(--remove); }
   .card.remove img { opacity:.45; }
   .card.pending.suggest-remove { border:2px dashed rgba(229,83,75,.6); }
   .card.pending.suggest-keep { border:2px dashed rgba(63,179,127,.6); }
+  .focused { outline:3px solid var(--accent); outline-offset:3px; }
+  .collapsing { opacity:0; transform:scale(.95); pointer-events:none; }
+  .cluster.collapsing { max-height:0 !important; margin-bottom:0; padding-top:0; padding-bottom:0; border-width:0; }
   .thumb { position:relative; background:#000; }
   .thumb img { display:block; width:100%; height:200px; object-fit:cover; cursor:zoom-in; }
   .badges { position:absolute; top:6px; left:6px; right:6px; display:flex; flex-wrap:wrap; gap:4px; pointer-events:none; }
   .badge { background:rgba(0,0,0,.7); border-radius:4px; padding:1px 6px; font-size:12px; }
+  .badge.num { background:#fff; color:#000; font-weight:700; }
   .badge.keeper { background:var(--accent); }
   .badge.protected { background:var(--keep); }
   .meta { padding:8px; flex:1; }
   .name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stats { color:var(--muted); font-size:12px; }
+  .stats .best { color:var(--text); font-weight:600; }
   .reason { margin-top:4px; font-size:12px; color:var(--muted); }
-  .actions { display:flex; gap:6px; padding:0 8px 8px; }
+  .actions { display:flex; flex-wrap:wrap; gap:6px; padding:0 8px 8px; }
   .actions button { flex:1; }
+  .actions .only-btn { flex-basis:100%; }
   .card.keep .keep-btn { background:var(--keep); border-color:var(--keep); }
   .card.remove .remove-btn { background:var(--remove); border-color:var(--remove); }
-  .cluster { background:#1c1d21; border:1px solid #2c2f36; border-radius:10px; padding:12px; margin-bottom:16px; }
-  .cluster > header { position:static; background:none; border:0; padding:0 0 10px; display:flex; gap:10px; align-items:center; }
+  .cluster { background:var(--panel2); border:1px solid #2c2f36; border-radius:10px; padding:12px; margin-bottom:16px; scroll-margin:170px 0 24px; overflow:hidden; transition:all .25s; }
+  .cluster > header { display:flex; gap:10px; align-items:center; padding-bottom:10px; }
   .cluster > header .spacer { flex:1; }
-  #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; cursor:zoom-out; }
+  .empty { text-align:center; padding:60px 20px; }
+  .empty h2 { font-weight:500; }
+  .empty button { margin:6px; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); z-index:50; display:flex; gap:12px; align-items:center; background:#2c2f36; border:1px solid #444; padding:8px 12px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,.5); }
+  #toast[hidden] { display:none; }
+  #lightbox { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.94); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:20px; }
   #lightbox[hidden] { display:none; }
-  #lightbox img { max-width:95vw; max-height:85vh; object-fit:contain; }
-  #lightbox p { max-width:900px; text-align:center; }
+  #lightbox img { max-width:95vw; max-height:78vh; object-fit:contain; border:3px solid transparent; border-radius:4px; }
+  #lightbox.keep img { border-color:var(--keep); }
+  #lightbox.remove img { border-color:var(--remove); }
+  #lightbox .info { max-width:900px; text-align:center; }
+  #lightbox .lb-actions { display:flex; gap:8px; }
+  #lightbox.keep .keep-btn { background:var(--keep); border-color:var(--keep); }
+  #lightbox.remove .remove-btn { background:var(--remove); border-color:var(--remove); }
+  dialog { background:var(--panel); color:var(--text); border:1px solid #444; border-radius:10px; padding:20px 24px; }
+  dialog::backdrop { background:rgba(0,0,0,.6); }
+  dialog table { border-collapse:collapse; }
+  dialog td { padding:3px 12px 3px 0; vertical-align:top; }
+  dialog h3 { margin:14px 0 6px; font-size:14px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Photo Review</h1>
+<header class="top">
+  <div class="titlebar">
+    <h1>Photo Review</h1>
+    <div class="progress"><div class="bar"><div id="progressBar"></div></div><span id="progressText"></span></div>
+    <button id="helpBtn" title="Keyboard shortcuts">Shortcuts <kbd>?</kbd></button>
+  </div>
   <nav id="tabs"></nav>
   <div class="controls">
     <label id="confControl">Min confidence
       <input type="range" id="conf" min="0.3" max="1" step="0.05" value="0.5">
       <span id="confVal">0.50</span>
     </label>
-    <label><input type="checkbox" id="pendingOnly" checked> Pending only</label>
-    <button id="bulkRemove">Remove all shown</button>
-    <button id="bulkKeep">Keep all shown</button>
-    <span class="muted">Dashed border = suggestion · solid = your decision · click image to enlarge</span>
+    <label><input type="checkbox" id="pendingOnly" checked> Hide finished</label>
+    <span class="spacer"></span>
+    <button id="bulkRemove"></button>
+    <button id="bulkKeep"></button>
   </div>
 </header>
 <main id="content"></main>
-<div id="lightbox" hidden><img alt=""><p></p></div>
+
+<div id="toast" hidden><span id="toastText"></span><button id="toastUndo">Undo <kbd>Z</kbd></button></div>
+
+<div id="lightbox" hidden>
+  <img alt="">
+  <div class="info"></div>
+  <div class="lb-actions">
+    <button id="lbPrev">← Prev</button>
+    <button class="keep-btn" id="lbKeep">Keep <kbd>K</kbd></button>
+    <button class="remove-btn" id="lbRemove">Remove <kbd>R</kbd></button>
+    <button id="lbNext">Next →</button>
+    <button id="lbClose">Close <kbd>Esc</kbd></button>
+  </div>
+</div>
+
+<dialog id="help">
+  <strong>Keyboard shortcuts</strong>
+  <h3>Duplicates</h3>
+  <table>
+    <tr><td><kbd>A</kbd> or <kbd>Enter</kbd></td><td>Accept suggestion for the highlighted group</td></tr>
+    <tr><td><kbd>K</kbd></td><td>Keep all photos in the group</td></tr>
+    <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>Keep only that photo, remove the rest</td></tr>
+    <tr><td><kbd>Space</kbd></td><td>Enlarge</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move between groups</td></tr>
+  </table>
+  <h3>Other tabs</h3>
+  <table>
+    <tr><td><kbd>R</kbd> / <kbd>K</kbd></td><td>Remove / keep the highlighted photo</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Move around</td></tr>
+    <tr><td><kbd>Space</kbd></td><td>Enlarge (then <kbd>←</kbd> <kbd>→</kbd> <kbd>R</kbd> <kbd>K</kbd> work there too)</td></tr>
+  </table>
+  <h3>Anywhere</h3>
+  <table>
+    <tr><td><kbd>Z</kbd> or <kbd>⌘Z</kbd></td><td>Undo last action</td></tr>
+    <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
+  </table>
+  <p class="muted">Dashed border = suggestion · solid border = your decision.<br>
+  Nothing changes in Photos until you run <code>uv run photo-review apply --yes</code>.</p>
+  <form method="dialog"><button class="primary">Got it</button></form>
+</dialog>
 
 <script>
-const state = { tab: "duplicate", conf: 0.5, pendingOnly: true, items: [], clusters: [] };
+const $ = s => document.querySelector(s);
+const BATCH = { grid: 60, clusters: 15 };
+const state = {
+  tab: localStorage.getItem("tab") || "duplicate",
+  conf: Number(localStorage.getItem("conf") || 0.5),
+  pendingOnly: localStorage.getItem("pendingOnly") !== "false",
+  list: [],      // grid items, or clusters on the duplicates tab
+  rendered: 0,
+  focus: 0,
+  summary: null,
+  undo: [],
+};
+const nodes = new Map();  // uuid (items) or "c<id>" (clusters) -> DOM node
+const lb = { list: [], index: 0, cluster: null };
+let queue = Promise.resolve();
+let toastTimer;
+
+const isDup = () => state.tab === "duplicate";
+const fmt = (v, d = 2) => (v == null ? "–" : Number(v).toFixed(d));
+const keyOf = x => (x.members ? `c${x.id}` : x.uuid);
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -87,130 +179,417 @@ async function api(path, opts) {
   return r.json();
 }
 
-const fmt = (v, d = 2) => (v == null ? "–" : Number(v).toFixed(d));
+// Serialise actions so rapid clicks/keys apply in order.
+function run(fn) {
+  queue = queue.then(fn).catch(err => toast(`Error: ${err.message}`, false));
+  return queue;
+}
+
+// --- summary / tabs --------------------------------------------------------
 
 async function loadSummary() {
-  const s = await api(`/api/summary?min_confidence=${state.conf}`);
-  const nav = document.getElementById("tabs");
-  nav.replaceChildren(...s.categories.map(c => el("button", {
-    class: c.key === state.tab ? "tab active" : "tab",
+  const s = state.summary = await api(`/api/summary?min_confidence=${state.conf}`);
+  $("#tabs").replaceChildren(...s.categories.map(c => el("button", {
+    class: `tab${c.key === state.tab ? " active" : ""}${c.pending === 0 ? " done" : ""}`,
     title: `${c.flagged} flagged · ${c.remove} remove · ${c.keep} keep`,
-    onclick: () => { state.tab = c.key; load(); },
-  }, c.label, el("span", { class: "count" }, `${c.pending} pending`))));
+    onclick: () => switchTab(c.key),
+  }, c.label, el("span", { class: "count" }, c.pending ? String(c.pending) : "✓"))));
+
+  const flagged = s.categories.reduce((n, c) => n + c.flagged, 0);
+  const done = s.categories.reduce((n, c) => n + c.flagged - c.pending, 0);
+  $("#progressBar").style.width = flagged ? `${(100 * done) / flagged}%` : "0";
+  $("#progressText").textContent =
+    `${done} of ${flagged} reviewed · ${s.remove_unique} marked for removal` +
+    (s.not_applied ? ` (${s.not_applied} not yet added to albums)` : "");
 }
 
-async function load() {
-  const isDup = state.tab === "duplicate";
-  document.getElementById("confControl").hidden = isDup;
-  document.getElementById("bulkRemove").textContent = isDup ? "Accept all suggestions shown" : "Remove all shown";
-  const main = document.getElementById("content");
-  main.replaceChildren(el("p", { class: "muted" }, "Loading…"));
-  await loadSummary();
-  if (isDup) {
-    const { clusters } = await api("/api/clusters");
-    state.clusters = clusters.filter(c => !state.pendingOnly || c.members.some(m => !m.decision));
-    main.replaceChildren(...(state.clusters.length ? state.clusters.map(clusterCard) : [el("p", { class: "muted" }, "Nothing to review.")]));
-  } else {
-    const { items } = await api(`/api/flags/${state.tab}?min_confidence=${state.conf}`);
-    state.items = items.filter(i => !state.pendingOnly || !i.decision);
-    main.replaceChildren(state.items.length
-      ? el("div", { class: "grid" }, ...state.items.map(i => itemCard(i)))
-      : el("p", { class: "muted" }, "Nothing to review."));
+function switchTab(key) {
+  state.tab = key;
+  localStorage.setItem("tab", key);
+  load();
+}
+
+function setPendingOnly(v) {
+  state.pendingOnly = v;
+  localStorage.setItem("pendingOnly", v);
+  $("#pendingOnly").checked = v;
+  load();
+}
+
+// --- list loading / rendering ---------------------------------------------
+
+async function load({ focusUuid } = {}) {
+  const dup = isDup();
+  $("#confControl").hidden = dup;
+  $("#content").replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  nodes.clear();
+  const [, data] = await Promise.all([
+    loadSummary(),
+    dup ? api("/api/clusters") : api(`/api/flags/${state.tab}?min_confidence=${state.conf}`),
+  ]);
+  state.list = dup
+    ? data.clusters.filter(c => !state.pendingOnly || c.members.some(m => !m.decision))
+    : data.items.filter(i => !state.pendingOnly || !i.decision);
+  state.rendered = 0;
+  updateBulkButtons();
+
+  if (!state.list.length) return showEmpty();
+  $("#content").replaceChildren(el("div", { id: "list", class: dup ? "clusters" : "grid" }), el("div", { id: "sentinel" }));
+  observer.disconnect();
+  observer.observe($("#sentinel"));
+  const idx = focusUuid
+    ? Math.max(0, state.list.findIndex(x => (x.members ? x.members.some(m => m.uuid === focusUuid) : x.uuid === focusUuid)))
+    : 0;
+  renderMore(idx + 1);
+  setFocus(idx, Boolean(focusUuid));
+}
+
+const observer = new IntersectionObserver(entries => {
+  if (entries[0].isIntersecting) renderMore();
+}, { rootMargin: "800px" });
+
+function renderMore(minCount = 0) {
+  const list = $("#list");
+  if (!list) return;
+  const target = Math.min(state.list.length, Math.max(state.rendered + BATCH[isDup() ? "clusters" : "grid"], minCount));
+  for (let i = state.rendered; i < target; i++) list.append(isDup() ? clusterCard(state.list[i]) : itemCard(state.list[i]));
+  state.rendered = target;
+}
+
+function updateBulkButtons() {
+  const n = state.list.length;
+  $("#bulkRemove").textContent = isDup() ? `Accept all ${n} suggestions` : `Remove all ${n}`;
+  $("#bulkKeep").textContent = isDup() ? `Keep all in ${n} groups` : `Keep all ${n}`;
+  $("#bulkRemove").disabled = $("#bulkKeep").disabled = n === 0;
+}
+
+function showEmpty() {
+  const cats = state.summary.categories;
+  const cat = cats.find(c => c.key === state.tab);
+  const next = cats.find(c => c.key !== state.tab && c.pending > 0);
+  updateBulkButtons();
+  $("#content").replaceChildren(el("div", { class: "empty" },
+    el("h2", {}, state.pendingOnly ? `All done with ${cat.label}` : "Nothing flagged here."),
+    next
+      ? el("button", { class: "primary", onclick: () => switchTab(next.key) }, `Next: ${next.label} (${next.pending} left) →`)
+      : el("p", {}, "Everything is reviewed. Run ", el("code", {}, "uv run photo-review apply"), " in the terminal to see what will go into albums."),
+    state.pendingOnly && el("button", { onclick: () => setPendingOnly(false) }, "Show finished items"),
+  ));
+}
+
+// --- focus -----------------------------------------------------------------
+
+function setFocus(i, scroll = true) {
+  document.querySelectorAll(".focused").forEach(n => n.classList.remove("focused"));
+  if (!state.list.length) return;
+  state.focus = Math.max(0, Math.min(i, state.list.length - 1));
+  if (state.focus >= state.rendered) renderMore(state.focus + 1);
+  const node = nodes.get(keyOf(state.list[state.focus]));
+  if (!node) return;
+  node.classList.add("focused");
+  if (scroll) node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function gridColumns() {
+  const list = $("#list");
+  return list ? getComputedStyle(list).gridTemplateColumns.split(" ").length : 1;
+}
+
+// Remove an entry from the visible list with a collapse animation.
+function dropEntry(entry) {
+  const node = nodes.get(keyOf(entry));
+  nodes.delete(keyOf(entry));
+  const i = state.list.indexOf(entry);
+  if (i >= 0) {
+    state.list.splice(i, 1);
+    state.rendered = Math.max(0, state.rendered - 1);
+    if (state.focus > i) state.focus--;
   }
+  if (node) {
+    node.style.maxHeight = `${node.offsetHeight}px`;
+    void node.offsetHeight;
+    node.classList.add("collapsing");
+    setTimeout(() => node.remove(), 260);
+  }
+  updateBulkButtons();
+  if (!state.list.length) return setTimeout(showEmpty, 280);
+  renderMore();
+  setFocus(state.focus);
 }
 
-async function decide(changes, category = state.tab) {
+function replaceNode(entry) {
+  const old = nodes.get(keyOf(entry));
+  const fresh = entry.members ? clusterCard(entry) : itemCard(entry);
+  old?.replaceWith(fresh);
+  if (state.list[state.focus] === entry) fresh.classList.add("focused");
+}
+
+// --- decisions -------------------------------------------------------------
+
+async function post(changes, category) {
   await api("/api/decisions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ items: changes.map(({ item, decision }) => ({ uuid: item.uuid, category, decision })) }),
   });
+}
+
+async function decide(changes, category, label) {
+  const prev = changes.map(({ item }) => ({ item, decision: item.decision ?? null }));
+  await post(changes, category);
   for (const { item, decision } of changes) item.decision = decision;
+  state.undo.push({ category, prev, tab: state.tab });
+  if (state.undo.length > 100) state.undo.shift();
+  toast(label);
   loadSummary();
 }
 
-function toggle(item, decision) {
-  return decide([{ item, decision: item.decision === decision ? null : decision }]);
+async function undo() {
+  const last = state.undo.pop();
+  if (!last) return toast("Nothing to undo", false);
+  await post(last.prev, last.category);
+  if (last.tab !== state.tab) {
+    state.tab = last.tab;
+    localStorage.setItem("tab", last.tab);
+  }
+  await load({ focusUuid: last.prev[0].item.uuid });
+  toast("Undone", false);
 }
 
-function itemCard(item, cluster = null) {
-  const suggestion = item.suggested || "remove";
+const verb = d => (d === "remove" ? "Marked remove" : d === "keep" ? "Marked keep" : "Cleared");
+
+function gridDecide(item, decision) {
+  return run(async () => {
+    const d = item.decision === decision ? null : decision;
+    await decide([{ item, decision: d }], state.tab, `${verb(d)}: ${item.filename}`);
+    if (state.pendingOnly && d) return dropEntry(item);
+    replaceNode(item);
+    if (d && state.list[state.focus] === item) setFocus(state.focus + 1);
+  });
+}
+
+function clusterDecide(c, pick, label) {
+  return run(async () => {
+    await decide(c.members.map(m => ({ item: m, decision: pick(m) })), "duplicate", label);
+    afterCluster(c, true);
+  });
+}
+
+function memberDecide(c, m, decision) {
+  return run(async () => {
+    const d = m.decision === decision ? null : decision;
+    await decide([{ item: m, decision: d }], "duplicate", `${verb(d)}: ${m.filename}`);
+    afterCluster(c, false);
+  });
+}
+
+const keepOnly = (c, keeper) =>
+  clusterDecide(c, m => (m === keeper || m.favorite || m.user_edited ? "keep" : "remove"), `Kept only ${keeper.filename}`);
+
+function afterCluster(c, advance) {
+  const finished = c.members.every(m => m.decision);
+  if (state.pendingOnly && finished) return dropEntry(c);
+  replaceNode(c);
+  if (advance && finished && state.list[state.focus] === c) setFocus(state.focus + 1);
+}
+
+// --- cards -----------------------------------------------------------------
+
+function stats(item, best) {
+  const part = (label, value, isBest) => el("span", { class: isBest ? "best" : "" }, label, value);
+  return el("div", { class: "stats" },
+    part("score ", fmt(item.score), best && item.score != null && item.score === best.score), " · ",
+    part("sharp ", fmt(item.sharpness, 0), best && item.sharpness === best.sharpness), " · ",
+    part("", `${item.mp} MP`, best && item.mp === best.mp),
+  );
+}
+
+function itemCard(item, cluster = null, best = null, index = 0) {
   const isProtected = item.favorite || item.user_edited;
-  const node = el("div", { class: `card ${item.decision || "pending"} suggest-${suggestion}` },
+  const openThis = () => (cluster ? openLightbox(cluster.members, index, cluster) : openLightbox(state.list, state.list.indexOf(item)));
+  const node = el("div", {
+    class: `card ${item.decision || "pending"} suggest-${item.suggested || "remove"}`,
+    onclick: () => { if (!cluster) setFocus(state.list.indexOf(item), false); },
+  },
     el("div", { class: "thumb" },
-      el("img", { src: `/thumb/${item.uuid}`, loading: "lazy", alt: item.filename, onclick: () => openLightbox(item) }),
+      el("img", { src: `/thumb/${item.uuid}`, loading: "lazy", alt: item.filename, onclick: openThis }),
       el("div", { class: "badges" },
-        item.is_keeper && el("span", { class: "badge keeper" }, "★ suggested keeper"),
+        cluster && index < 9 && el("span", { class: "badge num" }, String(index + 1)),
+        item.is_keeper && el("span", { class: "badge keeper" }, "★ suggested"),
         isProtected && el("span", { class: "badge protected" }, item.favorite ? "♥ favorite" : "✎ edited"),
-        item.confidence != null && el("span", { class: "badge" }, fmt(item.confidence)),
+        !cluster && item.confidence != null && el("span", { class: "badge" }, fmt(item.confidence)),
         item.kind === "video" && el("span", { class: "badge" }, `▶ ${fmt(item.duration, 1)}s`),
-        item.named.length > 0 && el("span", { class: "badge" }, `👤 ${item.named.join(", ")}`),
+        item.named.length > 0 && el("span", { class: "badge" }, item.named.join(", ")),
       ),
     ),
     el("div", { class: "meta" },
       el("div", { class: "name", title: item.filename }, item.filename),
-      el("div", { class: "muted" }, `${item.date} · score ${fmt(item.score)} · sharp ${fmt(item.sharpness, 0)} · ${item.mp} MP`),
-      item.reason && el("div", { class: "reason" }, item.reason),
+      el("div", { class: "stats" }, item.date),
+      stats(item, best),
+      !cluster && item.reason && el("div", { class: "reason" }, item.reason),
     ),
     el("div", { class: "actions" },
-      el("button", { class: "keep-btn", onclick: () => toggle(item, "keep").then(rerender) }, "Keep"),
-      el("button", { class: "remove-btn", onclick: () => toggle(item, "remove").then(rerender) }, "Remove"),
+      el("button", { class: "keep-btn", onclick: () => (cluster ? memberDecide(cluster, item, "keep") : gridDecide(item, "keep")) }, "Keep"),
+      el("button", { class: "remove-btn", onclick: () => (cluster ? memberDecide(cluster, item, "remove") : gridDecide(item, "remove")) }, "Remove"),
+      cluster && el("button", { class: "only-btn", onclick: () => keepOnly(cluster, item) }, "Keep only this", index < 9 && el("kbd", {}, String(index + 1))),
     ),
   );
-  function rerender() {
-    if (cluster) cluster.node.replaceWith(clusterCard(cluster));
-    else node.replaceWith(itemCard(item));
-  }
+  if (!cluster) nodes.set(item.uuid, node);
   return node;
 }
 
 function clusterCard(c) {
-  const accept = () => decide(c.members.map(m => ({ item: m, decision: m.suggested })), "duplicate");
-  const keepAll = () => decide(c.members.map(m => ({ item: m, decision: "keep" })), "duplicate");
-  c.node = el("section", { class: "cluster" },
+  const max = key => Math.max(...c.members.map(m => m[key] ?? -Infinity));
+  const best = { score: max("score"), sharpness: max("sharpness"), mp: max("mp") };
+  const decided = c.members.filter(m => m.decision).length;
+  const node = el("section", { class: "cluster", onclick: () => setFocus(state.list.indexOf(c), false) },
     el("header", {},
       el("strong", {}, `${c.members.length} similar shots`),
       el("span", { class: "muted" }, c.members[0].date),
+      decided > 0 && el("span", { class: "muted" }, `· ${decided}/${c.members.length} decided`),
       el("span", { class: "spacer" }),
-      el("button", { onclick: () => accept().then(() => c.node.replaceWith(clusterCard(c))) }, "Accept suggestion"),
-      el("button", { onclick: () => keepAll().then(() => c.node.replaceWith(clusterCard(c))) }, "Keep all"),
+      el("button", { class: "primary", onclick: () => clusterDecide(c, m => m.suggested, "Accepted suggestion") }, "Accept suggestion", el("kbd", {}, "A")),
+      el("button", { onclick: () => clusterDecide(c, () => "keep", "Kept all") }, "Keep all", el("kbd", {}, "K")),
     ),
-    el("div", { class: "row" }, ...c.members.map(m => itemCard(m, c))),
+    el("div", { class: "row" }, ...c.members.map((m, i) => itemCard(m, c, best, i))),
   );
-  return c.node;
+  nodes.set(`c${c.id}`, node);
+  return node;
 }
 
-function openLightbox(item) {
-  const box = document.getElementById("lightbox");
-  box.querySelector("img").src = `/full/${item.uuid}`;
-  box.querySelector("p").textContent =
-    `${item.filename} · ${item.date}${item.kind === "video" ? " · video (poster frame)" : ""}` +
-    `${item.caption ? ` — “${item.caption}”` : ""}${item.reason ? ` — ${item.reason}` : ""}`;
+// --- lightbox --------------------------------------------------------------
+
+function openLightbox(list, index, cluster = null) {
+  Object.assign(lb, { list: list.slice(), index, cluster });
+  showLightbox();
+}
+
+function showLightbox() {
+  const item = lb.list[lb.index];
+  if (!item) return closeLightbox();
+  const box = $("#lightbox");
   box.hidden = false;
+  box.className = item.decision || "";
+  box.querySelector("img").src = `/full/${item.uuid}`;
+  box.querySelector(".info").textContent =
+    `${lb.index + 1} / ${lb.list.length} · ${item.filename} · ${item.date}` +
+    (item.kind === "video" ? " · video (still frame)" : "") +
+    (item.caption ? ` — “${item.caption}”` : "") +
+    (item.reason ? ` — ${item.reason}` : "");
 }
 
-document.getElementById("lightbox").onclick = e => { e.currentTarget.hidden = true; };
-document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("lightbox").hidden = true; });
+const closeLightbox = () => { $("#lightbox").hidden = true; };
+const lightboxOpen = () => !$("#lightbox").hidden;
 
-const conf = document.getElementById("conf");
-conf.oninput = () => { document.getElementById("confVal").textContent = Number(conf.value).toFixed(2); };
-conf.onchange = () => { state.conf = Number(conf.value); load(); };
-document.getElementById("pendingOnly").onchange = e => { state.pendingOnly = e.target.checked; load(); };
+function lightboxMove(delta) {
+  lb.index = Math.max(0, Math.min(lb.list.length - 1, lb.index + delta));
+  showLightbox();
+}
 
-document.getElementById("bulkRemove").onclick = async () => {
-  if (state.tab === "duplicate") {
-    await decide(state.clusters.flatMap(c => c.members.map(m => ({ item: m, decision: m.suggested }))), "duplicate");
-  } else {
-    if (!confirm(`Mark ${state.items.length} items as remove?`)) return;
-    await decide(state.items.map(item => ({ item, decision: "remove" })));
+async function lightboxDecide(decision) {
+  const item = lb.list[lb.index];
+  await (lb.cluster ? memberDecide(lb.cluster, item, decision) : gridDecide(item, decision));
+  if (lb.index < lb.list.length - 1) lightboxMove(1);
+  else showLightbox();
+}
+
+$("#lightbox").onclick = e => { if (e.target.id === "lightbox") closeLightbox(); };
+$("#lbPrev").onclick = () => lightboxMove(-1);
+$("#lbNext").onclick = () => lightboxMove(1);
+$("#lbKeep").onclick = () => lightboxDecide("keep");
+$("#lbRemove").onclick = () => lightboxDecide("remove");
+$("#lbClose").onclick = closeLightbox;
+
+// --- toast -----------------------------------------------------------------
+
+function toast(text, withUndo = true) {
+  $("#toastText").textContent = text;
+  $("#toastUndo").hidden = !withUndo;
+  $("#toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $("#toast").hidden = true; }, 5000);
+}
+$("#toastUndo").onclick = () => run(undo);
+
+// --- keyboard --------------------------------------------------------------
+
+document.addEventListener("keydown", e => {
+  if (e.target.matches("input, textarea") || $("#help").open) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    return run(undo);
   }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+
+  if (lightboxOpen()) {
+    const actions = {
+      Escape: closeLightbox, ArrowLeft: () => lightboxMove(-1), ArrowRight: () => lightboxMove(1),
+      " ": closeLightbox, k: () => lightboxDecide("keep"), r: () => lightboxDecide("remove"),
+    };
+    if (actions[key]) { e.preventDefault(); actions[key](); }
+    return;
+  }
+
+  if (key === "?") return $("#help").showModal();
+  if (key === "z") return run(undo);
+  const cur = state.list[state.focus];
+  if (!cur) return;
+
+  let handled = true;
+  if (isDup()) {
+    if (key === "a" || key === "Enter") clusterDecide(cur, m => m.suggested, "Accepted suggestion");
+    else if (key === "k") clusterDecide(cur, () => "keep", "Kept all");
+    else if (/^[1-9]$/.test(key) && cur.members[Number(key) - 1]) keepOnly(cur, cur.members[Number(key) - 1]);
+    else if (key === "ArrowDown" || key === "j") setFocus(state.focus + 1);
+    else if (key === "ArrowUp") setFocus(state.focus - 1);
+    else if (key === " ") openLightbox(cur.members, 0, cur);
+    else handled = false;
+  } else {
+    if (key === "r") gridDecide(cur, "remove");
+    else if (key === "k") gridDecide(cur, "keep");
+    else if (key === "ArrowRight") setFocus(state.focus + 1);
+    else if (key === "ArrowLeft") setFocus(state.focus - 1);
+    else if (key === "ArrowDown") setFocus(state.focus + gridColumns());
+    else if (key === "ArrowUp") setFocus(state.focus - gridColumns());
+    else if (key === " " || key === "Enter") openLightbox(state.list, state.focus);
+    else handled = false;
+  }
+  if (handled) e.preventDefault();
+});
+
+// --- controls --------------------------------------------------------------
+
+const conf = $("#conf");
+conf.value = state.conf;
+$("#confVal").textContent = state.conf.toFixed(2);
+conf.oninput = () => { $("#confVal").textContent = Number(conf.value).toFixed(2); };
+conf.onchange = () => {
+  state.conf = Number(conf.value);
+  localStorage.setItem("conf", state.conf);
   load();
 };
-document.getElementById("bulkKeep").onclick = async () => {
-  const items = state.tab === "duplicate" ? state.clusters.flatMap(c => c.members) : state.items;
-  await decide(items.map(item => ({ item, decision: "keep" })));
-  load();
-};
+$("#pendingOnly").checked = state.pendingOnly;
+$("#pendingOnly").onchange = e => setPendingOnly(e.target.checked);
+$("#helpBtn").onclick = () => $("#help").showModal();
+
+$("#bulkRemove").onclick = () => run(async () => {
+  const n = state.list.length;
+  if (isDup()) {
+    if (!confirm(`Accept the suggestion for all ${n} groups?`)) return;
+    await decide(state.list.flatMap(c => c.members.map(m => ({ item: m, decision: m.suggested }))), "duplicate", `Accepted ${n} groups`);
+  } else {
+    if (!confirm(`Mark all ${n} items as remove?`)) return;
+    await decide(state.list.map(item => ({ item, decision: "remove" })), state.tab, `Marked ${n} as remove`);
+  }
+  await load();
+});
+$("#bulkKeep").onclick = () => run(async () => {
+  const items = isDup() ? state.list.flatMap(c => c.members) : state.list;
+  if (!confirm(`Mark all ${items.length} items as keep?`)) return;
+  await decide(items.map(item => ({ item, decision: "keep" })), state.tab, `Marked ${items.length} as keep`);
+  await load();
+});
 
 load();
 </script>

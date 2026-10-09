@@ -100,7 +100,11 @@ def create_app(db_path: Path) -> FastAPI:
             ).fetchall())
             out.append({"key": key, "label": label, "flagged": flagged, "pending": pending or 0,
                         "remove": counts.get("remove", 0), "keep": counts.get("keep", 0)})
-        return {"categories": out}
+        remove_unique, not_applied = conn.execute(
+            """SELECT COUNT(DISTINCT uuid), COUNT(DISTINCT CASE WHEN applied_at IS NULL THEN uuid END)
+               FROM decisions WHERE decision = 'remove'"""
+        ).fetchone()
+        return {"categories": out, "remove_unique": remove_unique, "not_applied": not_applied}
 
     @app.get("/api/clusters")
     def clusters():
