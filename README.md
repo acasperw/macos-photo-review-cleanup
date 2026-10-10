@@ -37,9 +37,9 @@ You only need to do this once.
    - **Quit and reopen** that app.
 4. **Open a terminal in this folder:**
    ```sh
-   cd ~/Documents/Development/photo_review
+   cd /path/to/photo_review
    ```
-   The first command you run installs everything automatically.
+   Use the folder where you cloned or downloaded this project. The first command you run installs everything automatically.
 
 ---
 
@@ -133,7 +133,7 @@ uv run photo-review apply --yes
 
 > **Run this step from the Terminal app, not VS Code.** macOS needs permission for the app to control Photos, and VS Code's built-in terminal usually can't get it. Open **Terminal** and run:
 > ```sh
-> cd ~/Documents/Development/photo_review && uv run photo-review apply --yes
+> cd /path/to/photo_review && uv run photo-review apply --yes
 > ```
 > The first time, click **OK** when macOS asks whether Terminal can control Photos.
 

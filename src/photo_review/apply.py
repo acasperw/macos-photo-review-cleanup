@@ -1,15 +1,19 @@
+import shlex
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
 ALBUM_NAME = "Photo Review"
 
-AUTOMATION_HELP = (
-    "macOS isn't letting this app control Photos.\n"
-    "VS Code's built-in terminal often can't get this permission. Instead, open the Terminal app and run:\n"
-    "    cd ~/Documents/Development/photo_review && uv run photo-review apply --yes\n"
-    "Click OK when macOS asks to let Terminal control Photos.\n"
-    "(Or: System Settings → Privacy & Security → Automation → switch on 'Photos' for your terminal app.)"
-)
+
+def _automation_help() -> str:
+    return (
+        "macOS isn't letting this app control Photos.\n"
+        "VS Code's built-in terminal often can't get this permission. Instead, open the Terminal app and run:\n"
+        f"    cd {shlex.quote(str(Path.cwd()))} && uv run photo-review apply --yes\n"
+        "Click OK when macOS asks to let Terminal control Photos.\n"
+        "(Or: System Settings → Privacy & Security → Automation → switch on 'Photos' for your terminal app.)"
+    )
 
 
 def check_photos_access() -> None:
@@ -19,7 +23,7 @@ def check_photos_access() -> None:
         photoscript.PhotosLibrary().folders()
     except Exception as e:
         if "-1743" in str(e) or "Not authorized" in str(e):
-            raise PermissionError(AUTOMATION_HELP) from e
+            raise PermissionError(_automation_help()) from e
         raise
 
 
