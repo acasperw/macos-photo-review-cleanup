@@ -200,7 +200,7 @@ async function loadSummary() {
   $("#progressBar").style.width = flagged ? `${(100 * done) / flagged}%` : "0";
   $("#progressText").textContent =
     `${done} of ${flagged} reviewed · ${s.remove_unique} marked for removal` +
-    (s.not_applied ? ` (${s.not_applied} not yet added to albums)` : "");
+    (s.not_applied ? ` (${s.not_applied} not yet added to the album)` : "");
 }
 
 function switchTab(key) {
@@ -272,7 +272,7 @@ function showEmpty() {
     el("h2", {}, state.pendingOnly ? `All done with ${cat.label}` : "Nothing flagged here."),
     next
       ? el("button", { class: "primary", onclick: () => switchTab(next.key) }, `Next: ${next.label} (${next.pending} left) →`)
-      : el("p", {}, "Everything is reviewed. Run ", el("code", {}, "uv run photo-review apply"), " in the terminal to see what will go into albums."),
+      : el("p", {}, "Everything is reviewed. Run ", el("code", {}, "uv run photo-review apply"), " in the terminal to see what will go into the Photo Review album."),
     state.pendingOnly && el("button", { onclick: () => setPendingOnly(false) }, "Show finished items"),
   ));
 }

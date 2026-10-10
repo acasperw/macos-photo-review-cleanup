@@ -130,12 +130,12 @@ def review(db_path: Path, port: int, no_browser: bool) -> None:
 
 
 @cli.command()
-@click.option("--yes", is_flag=True, help="Actually add to albums (default is a dry run).")
+@click.option("--yes", is_flag=True, help="Actually add to the album (default is a dry run).")
 @click.option("--reapply", is_flag=True, help="Include items already added in a previous run.")
 @click.pass_obj
 def apply(db_path: Path, yes: bool, reapply: bool) -> None:
-    """Add photos you marked 'remove' to 'Photo Review' albums in Photos. Never deletes."""
-    from .apply import ALBUM_FOLDER, add_to_albums, check_photos_access, pending_removals
+    """Add photos you marked 'remove' to the 'Photo Review' album in Photos. Never deletes."""
+    from .apply import ALBUM_NAME, add_to_album, check_photos_access, pending_removals
     from .classify import CATEGORIES
 
     conn = db.connect(db_path)
@@ -146,25 +146,25 @@ def apply(db_path: Path, yes: bool, reapply: bool) -> None:
 
     unique = {u for uuids in removals.values() for u in uuids}
     for category, uuids in removals.items():
-        click.echo(f"  {ALBUM_FOLDER}/{CATEGORIES[category]:<28}{len(uuids):>6,}")
-    click.echo(f"  {ALBUM_FOLDER}/All{'':<25}{len(unique):>6,}")
+        click.echo(f"  {CATEGORIES[category]:<28}{len(uuids):>6,}")
+    click.echo(f"  {'Total → ' + ALBUM_NAME:<28}{len(unique):>6,}")
 
     if not yes:
-        click.secho("Dry run. Re-run with --yes to add these to albums in Photos.", fg="yellow")
+        click.secho("Dry run. Re-run with --yes to add these to the album in Photos.", fg="yellow")
         return
 
-    click.echo("Adding to albums (Photos will open; allow automation access if asked)…")
+    click.echo("Adding to album (Photos will open; allow automation access if asked)…")
     try:
         check_photos_access()
     except PermissionError as e:
         raise click.ClickException(str(e)) from e
-    failed = add_to_albums(conn, removals)
+    failed = add_to_album(conn, removals)
     if failed:
         click.secho(f"{len(failed)} of {len(unique)} photos could not be added:", fg="red")
         for uuid, e in failed[:10]:
             click.secho(f"  {uuid}: {e}", fg="yellow")
     if len(failed) < len(unique):
-        click.echo(f"Done. Open Photos → '{ALBUM_FOLDER}' → 'All', check the photos, then select all and delete.")
+        click.echo(f"Done. Open Photos → '{ALBUM_NAME}', check the photos, then select all and delete.")
 
 
 @cli.command()

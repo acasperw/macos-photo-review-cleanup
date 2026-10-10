@@ -1,16 +1,14 @@
 import sqlite3
 from datetime import datetime, timezone
 
-from .classify import CATEGORIES
-
-ALBUM_FOLDER = "Photo Review"
+ALBUM_NAME = "Photo Review"
 
 AUTOMATION_HELP = (
     "macOS isn't letting this app control Photos.\n"
-    "Open System Settings → Privacy & Security → Automation, find Visual Studio Code (or Terminal) "
-    "and switch on 'Photos'. If it isn't listed, run:\n"
-    "    tccutil reset AppleEvents com.microsoft.VSCode\n"
-    "then quit and reopen VS Code and run apply again; macOS will ask for permission."
+    "VS Code's built-in terminal often can't get this permission. Instead, open the Terminal app and run:\n"
+    "    cd ~/Documents/Development/photo_review && uv run photo-review apply --yes\n"
+    "Click OK when macOS asks to let Terminal control Photos.\n"
+    "(Or: System Settings → Privacy & Security → Automation → switch on 'Photos' for your terminal app.)"
 )
 
 
@@ -35,30 +33,25 @@ def pending_removals(conn: sqlite3.Connection, reapply: bool = False) -> dict[st
     return out
 
 
-def add_to_albums(conn: sqlite3.Connection, removals: dict[str, list[str]]) -> list[tuple[str, str]]:
-    """Add photos to 'Photo Review/<category>' and 'Photo Review/All'. Returns failures."""
+def add_to_album(conn: sqlite3.Connection, removals: dict[str, list[str]]) -> list[tuple[str, str]]:
+    """Add all photos marked 'remove' to the single top-level review album. Returns failures."""
     import photoscript
     from osxphotos.photosalbum import PhotosAlbumPhotoScript
 
-    failed, added_all = [], {}
-    for category, uuids in removals.items():
-        photos = []
-        for uuid in uuids:
-            try:
-                photos.append(photoscript.Photo(uuid))
-            except Exception as e:
-                failed.append((uuid, str(e)))
-        if not photos:
-            continue
-        PhotosAlbumPhotoScript(f"{ALBUM_FOLDER}/{CATEGORIES[category]}", split_folder="/").update(photos)
-        added_all.update({p.uuid: p for p in photos})
-        now = datetime.now(timezone.utc).isoformat()
-        with conn:
-            conn.executemany(
-                "UPDATE decisions SET applied_at = ? WHERE uuid = ? AND category = ?",
-                [(now, p.uuid, category) for p in photos],
-            )
+    photos, failed = {}, []
+    for uuid in {u for uuids in removals.values() for u in uuids}:
+        try:
+            photos[uuid] = photoscript.Photo(uuid)
+        except Exception as e:
+            failed.append((uuid, str(e)))
+    if not photos:
+        return failed
 
-    if added_all:
-        PhotosAlbumPhotoScript(f"{ALBUM_FOLDER}/All", split_folder="/").update(list(added_all.values()))
+    PhotosAlbumPhotoScript(ALBUM_NAME).update(list(photos.values()))
+    now = datetime.now(timezone.utc).isoformat()
+    with conn:
+        conn.executemany(
+            "UPDATE decisions SET applied_at = ? WHERE uuid = ? AND category = ?",
+            [(now, uuid, category) for category, uuids in removals.items() for uuid in uuids if uuid in photos],
+        )
     return failed
