@@ -44,6 +44,11 @@
   .badge { background:rgba(0,0,0,.7); border-radius:4px; padding:1px 6px; font-size:12px; }
   .badge.num { background:#fff; color:#000; font-weight:700; }
   .badge.keeper { background:var(--accent); }
+  .badge.suggest-rm { background:rgba(229,83,75,.85); }
+  .pill { display:inline-block; padding:3px 12px; border-radius:14px; font-weight:600; margin:0 4px; background:#3a3d45; }
+  .pill.keeper { background:var(--accent); }
+  .pill.keep { background:var(--keep); }
+  .pill.remove { background:var(--remove); }
   .badge.protected { background:var(--keep); }
   .meta { padding:8px; flex:1; }
   .name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -104,6 +109,7 @@
 
 <div id="lightbox" hidden>
   <img alt="">
+  <div class="verdict"></div>
   <div class="info"></div>
   <div class="lb-actions">
     <button id="lbPrev">← Prev</button>
@@ -415,7 +421,8 @@ function itemCard(item, cluster = null, best = null, index = 0) {
       el("img", { src: `/thumb/${item.uuid}`, loading: "lazy", alt: item.filename, onclick: openThis }),
       el("div", { class: "badges" },
         cluster && index < 9 && el("span", { class: "badge num" }, String(index + 1)),
-        item.is_keeper && el("span", { class: "badge keeper" }, "★ suggested"),
+        item.is_keeper && el("span", { class: "badge keeper" }, "★ Suggested keep"),
+        cluster && !item.is_keeper && item.suggested === "remove" && el("span", { class: "badge suggest-rm" }, "Suggested remove"),
         isProtected && el("span", { class: "badge protected" }, item.favorite ? "♥ favorite" : "✎ edited"),
         !cluster && item.confidence != null && el("span", { class: "badge" }, fmt(item.confidence)),
         item.kind === "video" && el("span", { class: "badge" }, `▶ ${fmt(item.duration, 1)}s`),
@@ -471,6 +478,15 @@ function showLightbox() {
   box.hidden = false;
   box.className = item.decision || "";
   box.querySelector("img").src = `/full/${item.uuid}`;
+  const suggestion = lb.cluster && item.is_keeper
+    ? el("span", { class: "pill keeper" }, `★ Suggested: KEEP this one (best of ${lb.list.length})`)
+    : item.suggested === "keep"
+      ? el("span", { class: "pill keep" }, "Suggested: KEEP")
+      : el("span", { class: "pill remove" }, "Suggested: REMOVE");
+  box.querySelector(".verdict").replaceChildren(...[
+    suggestion,
+    item.decision && el("span", { class: `pill ${item.decision}` }, `Your choice: ${item.decision.toUpperCase()}`),
+  ].filter(Boolean));
   box.querySelector(".info").textContent =
     `${lb.index + 1} / ${lb.list.length} · ${item.filename} · ${item.date}` +
     (item.kind === "video" ? " · video (still frame)" : "") +

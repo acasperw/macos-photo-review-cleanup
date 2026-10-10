@@ -202,18 +202,19 @@ def find_clusters(assets: list[Asset], emb: np.ndarray) -> list[list[Asset]]:
 
 
 def keeper_key(a: Asset) -> tuple:
-    return (a.favorite, a.user_edited, bool(a.named), a.overall, a.sharpness, a.pixels, a.filesize)
+    # Scores within 0.01 count as a tie so sharpness/resolution decide instead.
+    return (a.favorite, a.user_edited, bool(a.named), round(a.overall, 2), a.sharpness, a.pixels, a.filesize)
 
 
-KEY_REASONS = ("keeper is a favorite", "keeper has your edit", "keeper has named people", None,
-               "keeper is sharper", "keeper has higher resolution", "keeper is a larger file")
+KEY_REASONS = ("it's a favorite", "it has your edit", "it has named people", None,
+               "it's sharper", "it has higher resolution", "it's a larger file")
 
 
 def keeper_reason(keeper: Asset, other: Asset) -> str:
     for reason, k, o in zip(KEY_REASONS, keeper_key(keeper), keeper_key(other)):
         if k != o:
-            return reason or f"keeper has higher Apple score ({k:.2f} vs {o:.2f})"
-    return "tie; kept earliest"
+            return reason or f"higher Apple score: {k:.2f} vs {o:.2f}"
+    return "it was taken first"
 
 
 def _fmt_dt(seconds: float) -> str:
@@ -321,8 +322,8 @@ def classify(conn: sqlite3.Connection) -> dict:
             cluster_rows.append((a.uuid, cid, int(a is keeper), sim))
             if a is keeper or a.protected:
                 continue
-            reason = (f"similar to {keeper.filename} ({sim:.2f}, {_fmt_dt(a.ts - keeper.ts)}); "
-                      f"{keeper_reason(keeper, a)}")
+            reason = (f"Suggest removing this one: ★ {keeper.filename} is the better shot "
+                      f"({keeper_reason(keeper, a)}). {sim:.0%} match, taken {_fmt_dt(a.ts - keeper.ts)}.")
             flag_rows.append((a.uuid, "duplicate", sim, reason))
 
     for a in assets:
