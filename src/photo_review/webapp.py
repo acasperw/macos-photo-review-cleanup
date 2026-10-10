@@ -81,7 +81,7 @@ def create_app(db_path: Path) -> FastAPI:
 
     @app.get("/full/{uuid}")
     def full(uuid: str):
-        return FileResponse(derivative_path(uuid)[1])
+        return FileResponse(derivative_path(uuid)[1], headers={"Cache-Control": "max-age=86400"})
 
     @app.get("/api/summary")
     def summary(min_confidence: float = 0.5):

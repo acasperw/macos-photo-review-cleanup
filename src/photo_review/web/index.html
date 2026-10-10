@@ -187,7 +187,7 @@ async function api(path, opts) {
 
 // Serialise actions so rapid clicks/keys apply in order.
 function run(fn) {
-  queue = queue.then(fn).catch(err => toast(`Error: ${err.message}`, false));
+  queue = queue.then(fn).then(() => true, err => { toast(`Error: ${err.message}`, false); return false; });
   return queue;
 }
 
@@ -466,6 +466,8 @@ function clusterCard(c) {
 
 // --- lightbox --------------------------------------------------------------
 
+let preloaded = []; // held so in-flight preloads aren't dropped
+
 function openLightbox(list, index, cluster = null) {
   Object.assign(lb, { list: list.slice(), index, cluster });
   showLightbox();
@@ -478,6 +480,9 @@ function showLightbox() {
   box.hidden = false;
   box.className = item.decision || "";
   box.querySelector("img").src = `/full/${item.uuid}`;
+  preloaded = [lb.list[lb.index + 1], lb.list[lb.index + 2], lb.list[lb.index - 1]]
+    .filter(Boolean)
+    .map(n => Object.assign(new Image(), { src: `/full/${n.uuid}` }));
   const suggestion = lb.cluster && item.is_keeper
     ? el("span", { class: "pill keeper" }, `★ Suggested: KEEP this one (best of ${lb.list.length})`)
     : item.suggested === "keep"
@@ -504,8 +509,12 @@ function lightboxMove(delta) {
 
 async function lightboxDecide(decision) {
   const item = lb.list[lb.index];
-  await (lb.cluster ? memberDecide(lb.cluster, item, decision) : gridDecide(item, decision));
-  if (lb.index < lb.list.length - 1) lightboxMove(1);
+  const ok = await (lb.cluster ? memberDecide(lb.cluster, item, decision) : gridDecide(item, decision));
+  if (!ok) return;
+  const last = lb.index >= lb.list.length - 1;
+  // Close when the section behind the lightbox was dropped from the UI.
+  if (lb.cluster ? !state.list.includes(lb.cluster) : last && !state.list.includes(item)) return closeLightbox();
+  if (!last) lightboxMove(1);
   else showLightbox();
 }
 
