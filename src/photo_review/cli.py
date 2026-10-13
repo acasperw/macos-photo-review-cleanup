@@ -130,16 +130,23 @@ def review(db_path: Path, port: int, no_browser: bool) -> None:
 
 
 @cli.command()
-@click.option("--yes", is_flag=True, help="Actually add to the album (default is a dry run).")
-@click.option("--reapply", is_flag=True, help="Include items already added in a previous run.")
+@click.option("--yes", is_flag=True, help="Actually make changes in Photos (default is a dry run).")
+@click.option("--album", is_flag=True, help="Add to the 'Photo Review' album instead of deleting.")
+@click.option("--reapply", is_flag=True, help="With --album: include items already added in a previous run.")
 @click.pass_obj
-def apply(db_path: Path, yes: bool, reapply: bool) -> None:
-    """Add photos you marked 'remove' to the 'Photo Review' album in Photos. Never deletes."""
-    from .apply import ALBUM_NAME, add_to_album, check_photos_access, pending_removals
+def apply(db_path: Path, yes: bool, album: bool, reapply: bool) -> None:
+    """Delete photos you marked 'remove' (recoverable from Recently Deleted for 30 days).
+
+    Falls back to adding them to the 'Photo Review' album if deleting isn't possible.
+    """
+    from .apply import (
+        ALBUM_NAME, DeleteCancelled, add_to_album, check_photos_access, delete_from_library, pending_removals,
+    )
     from .classify import CATEGORIES
 
     conn = db.connect(db_path)
-    removals = pending_removals(conn, reapply)
+    # Items previously added to the album still exist in Photos, so deletion includes them.
+    removals = pending_removals(conn, reapply or not album)
     if not removals:
         click.echo("Nothing to apply. Mark items as 'remove' in `photo-review review` first.")
         return
@@ -147,11 +154,30 @@ def apply(db_path: Path, yes: bool, reapply: bool) -> None:
     unique = {u for uuids in removals.values() for u in uuids}
     for category, uuids in removals.items():
         click.echo(f"  {CATEGORIES[category]:<28}{len(uuids):>6,}")
-    click.echo(f"  {'Total → ' + ALBUM_NAME:<28}{len(unique):>6,}")
+    click.echo(f"  {'Total → ' + (ALBUM_NAME if album else 'Recently Deleted'):<28}{len(unique):>6,}")
 
     if not yes:
-        click.secho("Dry run. Re-run with --yes to add these to the album in Photos.", fg="yellow")
+        if album:
+            click.secho("Dry run. Re-run with --yes --album to add these to the album in Photos.", fg="yellow")
+        else:
+            click.secho("Dry run. Re-run with --yes to delete these from Photos.", fg="yellow")
         return
+
+    if not album:
+        click.echo("Deleting from Photos. Confirm in the macOS dialog…")
+        try:
+            deleted, not_found = delete_from_library(conn, removals)
+        except DeleteCancelled:
+            raise click.ClickException("Cancelled. Nothing was deleted.")
+        except (PermissionError, RuntimeError) as e:
+            click.secho(f"Couldn't delete directly:\n{e}\nFalling back to the '{ALBUM_NAME}' album.", fg="yellow")
+        else:
+            if not_found:
+                click.secho(f"{len(not_found)} photos weren't found in Photos (already deleted?):", fg="yellow")
+                for uuid in not_found[:10]:
+                    click.secho(f"  {uuid}", fg="yellow")
+            click.echo(f"Deleted {len(deleted):,} photos. They stay in Photos → Recently Deleted for 30 days.")
+            return
 
     click.echo("Adding to album (Photos will open; allow automation access if asked)…")
     try:

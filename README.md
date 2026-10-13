@@ -2,7 +2,7 @@
 
 Finds duplicates and junk in your Apple Photos library so you can clean it up and free iCloud space.
 
-It **never deletes anything**. It puts photos you choose into a **Photo Review** album in Photos, and you delete them yourself.
+Nothing is deleted until you've reviewed it and run `apply --yes`. macOS then asks you to confirm, and deleted photos stay in **Recently Deleted** for 30 days.
 
 What it looks for:
 
@@ -119,7 +119,7 @@ Your decisions save automatically. Press **Ctrl+C** in the terminal to stop the 
 
 > **Nothing happens in Photos yet.** Clicking Keep or Remove only saves your choice on your Mac (in `data/`). You can close the page and come back later, and your choices are still there. Photos is only touched when you run `apply --yes` in step 5.
 
-### Step 5: Put the removals into the album
+### Step 5: Delete the removals
 
 First do a **dry run** to see what would happen. Nothing changes in Photos.
 ```sh
@@ -131,24 +131,26 @@ When you're happy with it:
 uv run photo-review apply --yes
 ```
 
-> **Run this step from the Terminal app, not VS Code.** macOS needs permission for the app to control Photos, and VS Code's built-in terminal usually can't get it. Open **Terminal** and run:
+> **Run this step from the Terminal app, not VS Code.** macOS needs permission for the app to access Photos, and VS Code's built-in terminal usually can't get it. Open **Terminal** and run:
 > ```sh
 > cd /path/to/photo_review && uv run photo-review apply --yes
 > ```
-> The first time, click **OK** when macOS asks whether Terminal can control Photos.
+> The first time, allow **Full Access** when macOS asks whether Terminal can access your photos.
 
-- This creates a single **Photo Review** album in Photos (under **My Albums**), containing every photo you marked **Remove**.
-- Photos marked **Keep**, or not decided yet, are left alone.
-- The first time, macOS asks whether Terminal may control Photos. Click **OK**.
-- Running it again only adds new decisions.
+- macOS shows a dialog asking you to confirm the deletion. Click **Delete** to go ahead, or cancel to leave everything as it is.
+- Only photos you marked **Remove** are deleted. Photos marked **Keep**, or not decided yet, are left alone.
+- Deleted items go to **Recently Deleted** in Photos for 30 days, so you can still recover them.
+- The deletions sync to iCloud and free up space.
 
-### Step 6: Delete in Photos (you do this)
+### Fallback: the Photo Review album
+
+If the tool can't delete directly (for example, Photos access was denied), it puts the photos into a **Photo Review** album (under **My Albums**) instead. You can also ask for this on purpose with `apply --yes --album`. Then delete them yourself:
 
 1. Open **Photos** and go to the **Photo Review** album.
 2. Have a quick look through.
 3. Select all (**⌘A**), then right-click and choose **Delete**.
-4. Deleted items go to **Recently Deleted** for 30 days, so you can still recover them.
-5. The deletions sync to iCloud and free up space.
+
+The first time the album is used, macOS asks whether Terminal may control Photos. Click **OK**.
 
 ---
 
@@ -157,8 +159,8 @@ uv run photo-review apply --yes
 | Situation | What to run |
 |---|---|
 | Carrying on with reviewing | `uv run photo-review review` |
-| Added to the album but **haven't deleted yet** | `uv run photo-review review`. Your decisions are kept, and `apply` won't add the same photos twice. |
-| **Deleted** photos in Photos | `scan`, then `classify`, then `review`. The scan clears out deleted photos so they stop showing up. |
+| Used the album fallback but **haven't deleted yet** | `uv run photo-review review`. Your decisions are kept, and `apply --album` won't add the same photos twice. |
+| **Deleted** photos yourself in Photos | `scan`, then `classify`, then `review`. The scan clears out deleted photos so they stop showing up. Photos deleted by `apply --yes` are cleared automatically. |
 | Taken **new photos** since | `scan`, `analyze`, `classify`, then `review`. Only new photos are processed. |
 
 If you're not sure, run all four in order. It's always safe, and your decisions are kept.
@@ -167,7 +169,7 @@ If you're not sure, run all four in order. It's always safe, and your decisions 
 
 ## Doing older years
 
-Repeat steps 1 to 6 with a different date range, for example:
+Repeat steps 1 to 5 with a different date range, for example:
 ```sh
 uv run photo-review scan --from 2024-01-01 --to 2025-01-01
 uv run photo-review analyze
@@ -185,7 +187,8 @@ uv run photo-review review
 | `uv run photo-review classify --min-confidence 0.7` | Shows only the more certain flags in the summary. |
 | `uv run photo-review analyze --force` | Re-analyzes everything from scratch. |
 | `uv run photo-review review --no-browser` | Starts the review page without opening a browser. |
-| `uv run photo-review apply --reapply` | Re-adds items that were already added to the album. |
+| `uv run photo-review apply --yes --album` | Adds removals to the **Photo Review** album instead of deleting them. |
+| `uv run photo-review apply --yes --album --reapply` | Re-adds items that were already added to the album. |
 | `uv run photo-review --help` | Lists all commands. |
 
 ---
@@ -194,9 +197,10 @@ uv run photo-review review
 
 - **"Could not get path to photo library database"** or **"Operation not permitted"**: Full Disk Access isn't on. See setup step 3, then quit and reopen the app.
 - **Some photos are only in iCloud.** That's fine. The tool uses the preview images Photos keeps on your Mac.
-- **`apply --yes` says "isn't letting this app control Photos"**, or the album doesn't appear:
+- **`apply --yes` says "isn't letting this app access your Photos library"**:
   - Run it from the **Terminal** app instead of VS Code (see step 5).
-  - If Terminal also fails, go to **System Settings → Privacy & Security → Automation** and switch on **Photos** under **Terminal**.
+  - If Terminal also fails, go to **System Settings → Privacy & Security → Photos** and set **Terminal** to **Full Access**.
+- **The album fallback says "isn't letting this app control Photos"**, or the album doesn't appear: go to **System Settings → Privacy & Security → Automation** and switch on **Photos** under **Terminal**.
 - **"address already in use" when starting `review`**: the review page is already running in another terminal. Use that one, or stop it with **Ctrl+C** first.
 - **Start over completely:** delete the `data/` folder. This also deletes your review decisions. Then begin again at step 1.
 
