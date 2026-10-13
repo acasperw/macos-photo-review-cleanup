@@ -29,6 +29,25 @@ def cli(ctx: click.Context, db_path: Path) -> None:
               help="End date (exclusive). Defaults to now.")
 @click.option("--library", type=click.Path(exists=True), default=None,
               help="Path to a .photoslibrary. Defaults to the system library.")
+@click.pass_context
+def prepare(ctx: click.Context, from_date: datetime, to_date: datetime | None, library: str | None) -> None:
+    """Scan, analyze and classify in one go. Only new photos are analyzed."""
+    ctx.invoke(scan, from_date=from_date, to_date=to_date, library=library)
+    click.echo()
+    ctx.invoke(analyze)
+    click.echo()
+    ctx.invoke(classify, examples=0)
+    click.echo("\nReady. Next run: uv run photo-review review")
+
+
+@cli.command()
+@click.option("--from", "from_date", type=click.DateTime(["%Y-%m-%d"]),
+              default=lambda: (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d"),
+              show_default="1 year ago", help="Start date (inclusive).")
+@click.option("--to", "to_date", type=click.DateTime(["%Y-%m-%d"]), default=None,
+              help="End date (exclusive). Defaults to now.")
+@click.option("--library", type=click.Path(exists=True), default=None,
+              help="Path to a .photoslibrary. Defaults to the system library.")
 @click.pass_obj
 def scan(db_path: Path, from_date: datetime, to_date: datetime | None, library: str | None) -> None:
     """Read photo/video metadata (incl. Apple scores) into the local cache."""
@@ -103,7 +122,7 @@ def classify(db_path: Path, min_confidence: float, examples: int) -> None:
     click.echo("Classifying…")
     result = run_classify(conn)
     if not result["assets"]:
-        click.echo("Nothing analyzed yet. Run `photo-review analyze` first.")
+        click.echo("Nothing analyzed yet. Run `photo-review prepare` first.")
         return
     click.echo(f"{result['clusters']:,} similar-shot groups covering {result['clustered']:,} assets.")
     print_flag_summary(conn, min_confidence, examples)

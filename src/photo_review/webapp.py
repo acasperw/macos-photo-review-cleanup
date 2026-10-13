@@ -145,6 +145,28 @@ def create_app(db_path: Path) -> FastAPI:
             for r in rows
         ]}
 
+    @app.get("/api/removals")
+    def removals():
+        rows = db.connect(db_path).execute(
+            f"""SELECT d.category, d.applied_at, f.reason, {ITEM_COLS}
+                FROM decisions d JOIN assets a USING(uuid) LEFT JOIN analysis an USING(uuid)
+                LEFT JOIN flags f ON f.uuid = d.uuid AND f.category = d.category
+                WHERE d.decision = 'remove'
+                ORDER BY a.date, d.category"""
+        ).fetchall()
+        items: dict[str, dict] = {}
+        for r in rows:
+            item = items.setdefault(r["uuid"], {
+                **_item(r), "decision": "remove", "categories": [], "reasons": [], "in_album": False,
+            })
+            label = CATEGORIES.get(r["category"], r["category"])
+            item["categories"].append(r["category"])
+            item["reasons"].append(f"{label}: {r['reason']}" if r["reason"] else label)
+            item["in_album"] |= r["applied_at"] is not None
+        for item in items.values():
+            item["reason"] = " · ".join(item.pop("reasons"))
+        return {"items": list(items.values())}
+
     @app.post("/api/decisions")
     def decide(batch: DecisionBatch):
         conn = db.connect(db_path)

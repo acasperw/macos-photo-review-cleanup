@@ -30,7 +30,7 @@ def print_flag_summary(conn: sqlite3.Connection, min_confidence: float, examples
         click.echo(f"  {row['category']:<14}{_pct(row['n'], total)}")
     click.echo(f"  {'any':<14}{_pct(flagged, total)}")
 
-    for row in counts:
+    for row in counts if examples else []:
         _section(f"{row['category']} — examples")
         for ex in conn.execute(
             """SELECT a.original_filename, a.date, f.confidence, f.reason FROM flags f
@@ -46,7 +46,7 @@ def print_report(conn: sqlite3.Connection) -> None:
     rows = conn.execute("SELECT * FROM assets ORDER BY date").fetchall()
     total = len(rows)
     if not total:
-        click.echo("No assets scanned yet. Run `photo-review scan` first.")
+        click.echo("No assets scanned yet. Run `photo-review prepare` first.")
         return
 
     photos = [r for r in rows if r["kind"] == "photo"]

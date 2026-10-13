@@ -40,6 +40,14 @@ You only need to do this once.
    cd /path/to/photo_review
    ```
    Use the folder where you cloned or downloaded this project. The first command you run installs everything automatically.
+5. **Optional: add a Hugging Face token.** This is only to stop the "unauthenticated requests to the HF Hub" warning and get faster model downloads. Everything works without it.
+   - Create a free **Read** token at https://huggingface.co/settings/tokens.
+   - Copy the example settings file:
+     ```sh
+     cp .env.example .env
+     ```
+   - Open `.env`, remove the `#` and paste your token after `HF_TOKEN=`.
+   - `.env` stays on your Mac and isn't committed to git.
 
 ---
 
@@ -47,41 +55,26 @@ You only need to do this once.
 
 Run these in order. Each step saves its results, so you can stop and come back later.
 
-### Step 1: Scan your library
+### Step 1: Prepare
 
 ```sh
-uv run photo-review scan
+uv run photo-review prepare
 ```
 
-This reads details for every photo and video from the **last 12 months**: Apple's quality scores, captions, labels, people and so on.
+This does three things in one go, for every photo and video from the **last 12 months**:
+
+1. **Scans** your library: Apple's quality scores, captions, labels, people and so on.
+2. **Analyzes** each photo using a free AI model that runs entirely **on your Mac**. Nothing is uploaded. The first run downloads the model (about 600 MB). After that, only new photos are analyzed, so re-running it is quick.
+3. **Finds duplicates and junk**: it groups similar shots, picks the best one in each group, and flags likely junk.
 
 To choose different dates:
 ```sh
-uv run photo-review scan --from 2024-01-01 --to 2025-01-01
+uv run photo-review prepare --from 2024-01-01 --to 2025-01-01
 ```
 
-### Step 2: Analyze the images
+It's safe to re-run at any time. Your review decisions (step 2) are kept.
 
-```sh
-uv run photo-review analyze
-```
-
-This looks at each photo using a free AI model that runs entirely **on your Mac**. Nothing is uploaded.
-
-- The first run downloads the model (about 600 MB).
-- It only processes photos it hasn't seen before, so re-running it is quick.
-
-### Step 3: Find duplicates and junk
-
-```sh
-uv run photo-review classify
-```
-
-This groups similar shots, picks the best one in each group, and flags likely junk. It prints a summary with examples.
-
-It's safe to re-run at any time. Your review decisions (step 4) are kept.
-
-### Step 4: Review in your browser
+### Step 2: Review in your browser
 
 ```sh
 uv run photo-review review
@@ -106,6 +99,7 @@ Your browser opens at **http://127.0.0.1:8765**. It only runs on your Mac.
   - Use the **Min confidence** slider to show only the most certain flags.
   - **Remove all** marks everything in the tab as remove. It asks you to confirm first.
 - When a tab is finished, a **Next** button takes you to the next category with items left.
+- **Marked for removal** tab (on the right): everything you've marked **Remove**, across all categories. This is exactly what `apply` will delete. Click **Keep instead** (or press **K**) to rescue a photo.
 
 **Keyboard shortcuts** (press **?** in the page to see them):
 
@@ -117,9 +111,9 @@ Your browser opens at **http://127.0.0.1:8765**. It only runs on your Mac.
 
 Your decisions save automatically. Press **Ctrl+C** in the terminal to stop the review page.
 
-> **Nothing happens in Photos yet.** Clicking Keep or Remove only saves your choice on your Mac (in `data/`). You can close the page and come back later, and your choices are still there. Photos is only touched when you run `apply --yes` in step 5.
+> **Nothing happens in Photos yet.** Clicking Keep or Remove only saves your choice on your Mac (in `data/`). You can close the page and come back later, and your choices are still there. Photos is only touched when you run `apply --yes` in step 3.
 
-### Step 5: Delete the removals
+### Step 3: Delete the removals
 
 First do a **dry run** to see what would happen. Nothing changes in Photos.
 ```sh
@@ -160,20 +154,17 @@ The first time the album is used, macOS asks whether Terminal may control Photos
 |---|---|
 | Carrying on with reviewing | `uv run photo-review review` |
 | Used the album fallback but **haven't deleted yet** | `uv run photo-review review`. Your decisions are kept, and `apply --album` won't add the same photos twice. |
-| **Deleted** photos yourself in Photos | `scan`, then `classify`, then `review`. The scan clears out deleted photos so they stop showing up. Photos deleted by `apply --yes` are cleared automatically. |
-| Taken **new photos** since | `scan`, `analyze`, `classify`, then `review`. Only new photos are processed. |
+| **Deleted** photos yourself in Photos, or taken **new photos** since | `prepare`, then `review`. Deleted photos stop showing up, and only new photos are analyzed. Photos deleted by `apply --yes` are cleared automatically. |
 
-If you're not sure, run all four in order. It's always safe, and your decisions are kept.
+If you're not sure, run `prepare` then `review`. It's always safe, and your decisions are kept.
 
 ---
 
 ## Doing older years
 
-Repeat steps 1 to 5 with a different date range, for example:
+Repeat steps 1 to 3 with a different date range, for example:
 ```sh
-uv run photo-review scan --from 2024-01-01 --to 2025-01-01
-uv run photo-review analyze
-uv run photo-review classify
+uv run photo-review prepare --from 2024-01-01 --to 2025-01-01
 uv run photo-review review
 ```
 
@@ -183,8 +174,9 @@ uv run photo-review review
 
 | Command | What it does |
 |---|---|
+| `uv run photo-review scan` / `analyze` / `classify` | Run the three parts of `prepare` one at a time. |
 | `uv run photo-review inspect` | Summarizes what's been scanned: counts, Apple scores, labels and so on. |
-| `uv run photo-review classify --min-confidence 0.7` | Shows only the more certain flags in the summary. |
+| `uv run photo-review classify --min-confidence 0.7` | Re-flags and prints a summary with examples, showing only the more certain flags. |
 | `uv run photo-review analyze --force` | Re-analyzes everything from scratch. |
 | `uv run photo-review review --no-browser` | Starts the review page without opening a browser. |
 | `uv run photo-review apply --yes --album` | Adds removals to the **Photo Review** album instead of deleting them. |
@@ -198,10 +190,10 @@ uv run photo-review review
 - **"Could not get path to photo library database"** or **"Operation not permitted"**: Full Disk Access isn't on. See setup step 3, then quit and reopen the app.
 - **Some photos are only in iCloud.** That's fine. The tool uses the preview images Photos keeps on your Mac.
 - **`apply --yes` says "isn't letting this app access your Photos library"**:
-  - Run it from the **Terminal** app instead of VS Code (see step 5).
+  - Run it from the **Terminal** app instead of VS Code (see step 3).
   - If Terminal also fails, go to **System Settings → Privacy & Security → Photos** and set **Terminal** to **Full Access**.
 - **The album fallback says "isn't letting this app control Photos"**, or the album doesn't appear: go to **System Settings → Privacy & Security → Automation** and switch on **Photos** under **Terminal**.
 - **"address already in use" when starting `review`**: the review page is already running in another terminal. Use that one, or stop it with **Ctrl+C** first.
-- **Start over completely:** delete the `data/` folder. This also deletes your review decisions. Then begin again at step 1.
+- **Start over completely:** delete the `data/` folder. This also deletes your review decisions. Then begin again at step 1 (`prepare`).
 
 All data (scan results, analysis, decisions, thumbnails) is stored in `data/`, on your Mac only, and isn't committed to git.

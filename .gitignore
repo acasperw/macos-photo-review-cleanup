@@ -9,6 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
+# Local settings (may contain tokens)
+.env
+
 # Local cache (contains photo metadata)
 data/
 .DS_Store

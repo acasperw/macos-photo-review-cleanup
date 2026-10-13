@@ -21,6 +21,8 @@
   .tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
   .tab .count { display:inline-block; min-width:20px; margin-left:6px; padding:0 6px; border-radius:10px; background:rgba(255,255,255,.14); font-size:12px; text-align:center; }
   .tab.done .count { background:var(--keep); color:#fff; }
+  .tab.removals { margin-left:auto; }
+  .tab.removals .count { background:var(--remove); color:#fff; }
   .controls { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:8px; color:var(--muted); }
   .controls .spacer { flex:1; }
   kbd { font:11px ui-monospace, Menlo, monospace; background:rgba(255,255,255,.15); border-radius:3px; padding:0 4px; margin-left:4px; }
@@ -33,6 +35,7 @@
   .card.keep { border-color:var(--keep); }
   .card.remove { border-color:var(--remove); }
   .card.remove img { opacity:.45; }
+  .card.marked { border-color:var(--remove); }
   .card.pending.suggest-remove { border:2px dashed rgba(229,83,75,.6); }
   .card.pending.suggest-keep { border:2px dashed rgba(63,179,127,.6); }
   .focused { outline:3px solid var(--accent); outline-offset:3px; }
@@ -97,7 +100,7 @@
       <input type="range" id="conf" min="0.3" max="1" step="0.05" value="0.5">
       <span id="confVal">0.50</span>
     </label>
-    <label><input type="checkbox" id="pendingOnly" checked> Hide finished</label>
+    <label id="pendingControl"><input type="checkbox" id="pendingOnly" checked> Hide finished</label>
     <span class="spacer"></span>
     <button id="bulkRemove"></button>
     <button id="bulkKeep"></button>
@@ -165,6 +168,7 @@ let queue = Promise.resolve();
 let toastTimer;
 
 const isDup = () => state.tab === "duplicate";
+const isRemovals = () => state.tab === "removals";
 const fmt = (v, d = 2) => (v == null ? "–" : Number(v).toFixed(d));
 const keyOf = x => (x.members ? `c${x.id}` : x.uuid);
 
@@ -199,14 +203,17 @@ async function loadSummary() {
     class: `tab${c.key === state.tab ? " active" : ""}${c.pending === 0 ? " done" : ""}`,
     title: `${c.flagged} flagged · ${c.remove} remove · ${c.keep} keep`,
     onclick: () => switchTab(c.key),
-  }, c.label, el("span", { class: "count" }, c.pending ? String(c.pending) : "✓"))));
+  }, c.label, el("span", { class: "count" }, c.pending ? String(c.pending) : "✓"))),
+  el("button", {
+    class: `tab removals${isRemovals() ? " active" : ""}`,
+    title: "Everything you've marked Remove, across all categories",
+    onclick: () => switchTab("removals"),
+  }, "Marked for removal", el("span", { class: "count" }, String(s.remove_unique))));
 
   const flagged = s.categories.reduce((n, c) => n + c.flagged, 0);
   const done = s.categories.reduce((n, c) => n + c.flagged - c.pending, 0);
   $("#progressBar").style.width = flagged ? `${(100 * done) / flagged}%` : "0";
-  $("#progressText").textContent =
-    `${done} of ${flagged} reviewed · ${s.remove_unique} marked for removal` +
-    (s.not_applied ? ` (${s.not_applied} not yet added to the album)` : "");
+  $("#progressText").textContent = `${done} of ${flagged} reviewed · ${s.remove_unique} marked for removal`;
 }
 
 function switchTab(key) {
@@ -225,17 +232,18 @@ function setPendingOnly(v) {
 // --- list loading / rendering ---------------------------------------------
 
 async function load({ focusUuid } = {}) {
-  const dup = isDup();
-  $("#confControl").hidden = dup;
+  const dup = isDup(), rm = isRemovals();
+  $("#confControl").hidden = dup || rm;
+  $("#pendingControl").hidden = rm;
   $("#content").replaceChildren(el("p", { class: "muted" }, "Loading…"));
   nodes.clear();
   const [, data] = await Promise.all([
     loadSummary(),
-    dup ? api("/api/clusters") : api(`/api/flags/${state.tab}?min_confidence=${state.conf}`),
+    dup ? api("/api/clusters") : rm ? api("/api/removals") : api(`/api/flags/${state.tab}?min_confidence=${state.conf}`),
   ]);
   state.list = dup
     ? data.clusters.filter(c => !state.pendingOnly || c.members.some(m => !m.decision))
-    : data.items.filter(i => !state.pendingOnly || !i.decision);
+    : data.items.filter(i => rm || !state.pendingOnly || !i.decision);
   state.rendered = 0;
   updateBulkButtons();
 
@@ -267,18 +275,23 @@ function updateBulkButtons() {
   $("#bulkRemove").textContent = isDup() ? `Accept all ${n} suggestions` : `Remove all ${n}`;
   $("#bulkKeep").textContent = isDup() ? `Keep all in ${n} groups` : `Keep all ${n}`;
   $("#bulkRemove").disabled = $("#bulkKeep").disabled = n === 0;
+  $("#bulkRemove").hidden = $("#bulkKeep").hidden = isRemovals();
 }
 
 function showEmpty() {
+  updateBulkButtons();
+  if (isRemovals()) {
+    return $("#content").replaceChildren(el("div", { class: "empty" }, el("h2", {}, "Nothing marked for removal.")));
+  }
   const cats = state.summary.categories;
   const cat = cats.find(c => c.key === state.tab);
   const next = cats.find(c => c.key !== state.tab && c.pending > 0);
-  updateBulkButtons();
   $("#content").replaceChildren(el("div", { class: "empty" },
     el("h2", {}, state.pendingOnly ? `All done with ${cat.label}` : "Nothing flagged here."),
     next
       ? el("button", { class: "primary", onclick: () => switchTab(next.key) }, `Next: ${next.label} (${next.pending} left) →`)
-      : el("p", {}, "Everything is reviewed. Run ", el("code", {}, "uv run photo-review apply"), " in the terminal to see what will go into the Photo Review album."),
+      : el("p", {}, "Everything is reviewed. Check the ", el("strong", {}, "Marked for removal"), " tab, then run ",
+          el("code", {}, "uv run photo-review apply"), " in the terminal."),
     state.pendingOnly && el("button", { onclick: () => setPendingOnly(false) }, "Show finished items"),
   ));
 }
@@ -336,12 +349,12 @@ async function post(changes, category) {
   await api("/api/decisions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items: changes.map(({ item, decision }) => ({ uuid: item.uuid, category, decision })) }),
+    body: JSON.stringify({ items: changes.map(c => ({ uuid: c.item.uuid, category: c.category ?? category, decision: c.decision })) }),
   });
 }
 
 async function decide(changes, category, label) {
-  const prev = changes.map(({ item }) => ({ item, decision: item.decision ?? null }));
+  const prev = changes.map(({ item, category }) => ({ item, category, decision: item.decision ?? null }));
   await post(changes, category);
   for (const { item, decision } of changes) item.decision = decision;
   state.undo.push({ category, prev, tab: state.tab });
@@ -365,12 +378,21 @@ async function undo() {
 const verb = d => (d === "remove" ? "Marked remove" : d === "keep" ? "Marked keep" : "Cleared");
 
 function gridDecide(item, decision) {
+  if (isRemovals()) return decision === "keep" ? unmark(item) : Promise.resolve(false);
   return run(async () => {
     const d = item.decision === decision ? null : decision;
     await decide([{ item, decision: d }], state.tab, `${verb(d)}: ${item.filename}`);
     if (state.pendingOnly && d) return dropEntry(item);
     replaceNode(item);
     if (d && state.list[state.focus] === item) setFocus(state.focus + 1);
+  });
+}
+
+// Keeping from the removals tab clears 'remove' in every category the photo was marked in.
+function unmark(item) {
+  return run(async () => {
+    await decide(item.categories.map(category => ({ item, decision: "keep", category })), null, `Kept: ${item.filename}`);
+    dropEntry(item);
   });
 }
 
@@ -412,9 +434,10 @@ function stats(item, best) {
 
 function itemCard(item, cluster = null, best = null, index = 0) {
   const isProtected = item.favorite || item.user_edited;
+  const rm = !cluster && isRemovals();
   const openThis = () => (cluster ? openLightbox(cluster.members, index, cluster) : openLightbox(state.list, state.list.indexOf(item)));
   const node = el("div", {
-    class: `card ${item.decision || "pending"} suggest-${item.suggested || "remove"}`,
+    class: rm ? "card marked" : `card ${item.decision || "pending"} suggest-${item.suggested || "remove"}`,
     onclick: () => { if (!cluster) setFocus(state.list.indexOf(item), false); },
   },
     el("div", { class: "thumb" },
@@ -424,6 +447,7 @@ function itemCard(item, cluster = null, best = null, index = 0) {
         item.is_keeper && el("span", { class: "badge keeper" }, "★ Suggested keep"),
         cluster && !item.is_keeper && item.suggested === "remove" && el("span", { class: "badge suggest-rm" }, "Suggested remove"),
         isProtected && el("span", { class: "badge protected" }, item.favorite ? "♥ favorite" : "✎ edited"),
+        rm && item.in_album && el("span", { class: "badge" }, "In album"),
         !cluster && item.confidence != null && el("span", { class: "badge" }, fmt(item.confidence)),
         item.kind === "video" && el("span", { class: "badge" }, `▶ ${fmt(item.duration, 1)}s`),
         item.named.length > 0 && el("span", { class: "badge" }, item.named.join(", ")),
@@ -436,8 +460,9 @@ function itemCard(item, cluster = null, best = null, index = 0) {
       !cluster && item.reason && el("div", { class: "reason" }, item.reason),
     ),
     el("div", { class: "actions" },
-      el("button", { class: "keep-btn", onclick: () => (cluster ? memberDecide(cluster, item, "keep") : gridDecide(item, "keep")) }, "Keep"),
-      el("button", { class: "remove-btn", onclick: () => (cluster ? memberDecide(cluster, item, "remove") : gridDecide(item, "remove")) }, "Remove"),
+      el("button", { class: "keep-btn", onclick: () => (cluster ? memberDecide(cluster, item, "keep") : gridDecide(item, "keep")) },
+        rm ? "Keep instead" : "Keep", rm && el("kbd", {}, "K")),
+      !rm && el("button", { class: "remove-btn", onclick: () => (cluster ? memberDecide(cluster, item, "remove") : gridDecide(item, "remove")) }, "Remove"),
       cluster && el("button", { class: "only-btn", onclick: () => keepOnly(cluster, item) }, "Keep only this", index < 9 && el("kbd", {}, String(index + 1))),
     ),
   );
@@ -483,7 +508,7 @@ function showLightbox() {
   preloaded = [lb.list[lb.index + 1], lb.list[lb.index + 2], lb.list[lb.index - 1]]
     .filter(Boolean)
     .map(n => Object.assign(new Image(), { src: `/full/${n.uuid}` }));
-  const suggestion = lb.cluster && item.is_keeper
+  const suggestion = isRemovals() ? null : lb.cluster && item.is_keeper
     ? el("span", { class: "pill keeper" }, `★ Suggested: KEEP this one (best of ${lb.list.length})`)
     : item.suggested === "keep"
       ? el("span", { class: "pill keep" }, "Suggested: KEEP")
